@@ -25,6 +25,7 @@ pub async fn get_value_from_redis(
     let key = format!("{}_{}_{}", form.channel, form.clientVersion, if isWhite {"pre"} else {"prod"});
 
     if let Some(version_str) = version_map.get(&key) {
+        log::info!("key: {}, value: {}", key, version_str);
         // 假设 value 是 JSON 字符串
         match serde_json::from_str::<VersionInfo>(version_str) {
             Ok(version_info) => {
