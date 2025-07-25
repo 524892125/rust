@@ -32,7 +32,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(version_cache.clone()))
             .service(get_value_from_redis)
     })
-        .bind(("0.0.0.0", 8085))?
+        .bind(("0.0.0.0", 8080))?
         .run()
         .await
 }
