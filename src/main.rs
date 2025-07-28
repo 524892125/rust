@@ -32,7 +32,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(version_cache.clone()))
             .service(get_value_from_redis)
     })
-        .bind(("0.0.0.0", 8080))?
+        .workers(num_cpus::get() * 2) // 根据机器 CPU 设置
+        .bind(("0.0.0.0", 8085))?
         .run()
         .await
 }
