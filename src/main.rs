@@ -7,6 +7,7 @@ mod logger;
 mod response;
 mod entity;
 mod middleware;
+mod utils;
 
 use crate::redis_pool::create_redis_pool;
 use modules::version_service::get_value_from_redis;

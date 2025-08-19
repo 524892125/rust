@@ -1,11 +1,10 @@
 // src/modules/math.rs
 
-use actix_web::{get, web, Responder, HttpResponse, post, HttpMessage};
-use crate::redis_pool::RedisPool;
+use actix_web::{web, Responder, post, HttpMessage};
 use crate::modules::version_cache::VersionCache;
 use crate::request::version_request::FormParams;
 use crate::response::result::ApiResponse;
-use crate::entity::version_info::VersionInfo;
+use crate::utils::request_id::get_request_id;
 
 
 #[post("/get_value")]
@@ -15,11 +14,7 @@ pub async fn get_value_from_redis(
     form: web::Form<FormParams>
 ) -> impl Responder {
     // 先 clone Arc<String> 或用引用保存
-    let request_id: std::sync::Arc<String> = req
-        .extensions()
-        .get::<std::sync::Arc<String>>()
-        .cloned() // clone Arc（增加引用计数），不会复制 String 内容
-        .unwrap_or_else(|| std::sync::Arc::new("none".to_string()));
+    let request_id = get_request_id(&req);
     println!("requestId: {}", request_id);
 
     if !cache.has_channel(&form.channel) {
