@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dashmap = "5"  # 高性能并发 HashMap
 actix-web = "4.11.0"
 mysql = "26.0.0"
 redis = "0.32.4"

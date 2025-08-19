@@ -1,89 +1,74 @@
 use deadpool_redis::redis::AsyncCommands;
-use std::collections::{HashMap, HashSet};
+use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::collections::{HashMap, HashSet};
 use crate::redis_pool::RedisPool;
+use crate::entity::version_info::VersionInfo;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct VersionCache {
-    // 用于存储 Hash 类型的数据，例如 gm:version
-    pub version_map: Arc<RwLock<HashMap<String, String>>>,
-
-    // 用于存储 Set 类型的数据，例如 gm:version:channel
-    pub channel_set: Arc<RwLock<HashSet<String>>>,
-
-    pub device_white_set: Arc<RwLock<HashSet<String>>>,
-    pub version_last_map: Arc<RwLock<HashMap<String,String>>>
+    pub version_map: Arc<DashMap<String, Arc<VersionInfo>>>, // 预解析 JSON
+    pub version_last_map: Arc<DashMap<String,String>>,
+    pub channel_set: Arc<DashMap<String, ()>>, // set 用 DashMap 当做 concurrent set
+    pub device_white_set: Arc<DashMap<String, ()>>,
 }
 
 impl VersionCache {
     pub fn new() -> Self {
         Self {
-            version_map: Arc::new(RwLock::new(HashMap::new())),
-            channel_set: Arc::new(RwLock::new(HashSet::new())),
-            device_white_set: Arc::new(RwLock::new(HashSet::new())),
-            version_last_map: Arc::new(RwLock::new(HashMap::new())),
+            version_map: Arc::new(DashMap::new()),
+            version_last_map: Arc::new(DashMap::new()),
+            channel_set: Arc::new(DashMap::new()),
+            device_white_set: Arc::new(DashMap::new()),
         }
     }
 
-    /// 加载 Redis 中 gm:version（hash）和 gm:version:channel（set）数据
+    /// 加载 Redis 数据并预解析 JSON
     pub async fn load_from_redis(&self, redis_pool: &RedisPool) -> Result<(), String> {
         let mut conn = redis_pool.get().await.map_err(|e| e.to_string())?;
 
-        // 加载 gm:version (hash)
+        // gm:version (hash)
         let version_data: HashMap<String, String> =
             conn.hgetall("gm:version").await.map_err(|e| e.to_string())?;
-        {
-            let mut map_guard = self.version_map.write().await;
-            *map_guard = version_data;
+        self.version_map.clear();
+        for (k, v) in version_data {
+            match serde_json::from_str::<VersionInfo>(&v) {
+                Ok(info) => { self.version_map.insert(k, Arc::new(info)); },
+                Err(e) => { log::error!("Parse VersionInfo failed: {}", e); }
+            }
         }
-        log::info!("Loaded version cache: {:?}", self.version_map.read().await);
 
-        // 加载最后的版本
-        let last_version_data: HashMap<String, String> =
+        // gm:version:last (hash)
+        let last_version_data: HashMap<String,String> =
             conn.hgetall("gm:version:last").await.map_err(|e| e.to_string())?;
-        {
-            let mut map_guard = self.version_last_map.write().await;
-            *map_guard = last_version_data;
-        }
+        self.version_last_map.clear();
+        for (k,v) in last_version_data { self.version_last_map.insert(k,v); }
 
-        // 加载 gm:version:channel (set)
+        // gm:version:channel (set)
         let channel_data: HashSet<String> =
             conn.smembers("gm:version:channel").await.map_err(|e| e.to_string())?;
-        {
-            let mut set_guard = self.channel_set.write().await;
-            *set_guard = channel_data;
-        }
+        self.channel_set.clear();
+        for v in channel_data { self.channel_set.insert(v, ()); }
 
-        // 加载 gm:version:device (set)
+        // gm:version:device (set)
         let device_data: HashSet<String> =
             conn.smembers("gm:version:device").await.map_err(|e| e.to_string())?;
-        {
-            let mut set_guard = self.device_white_set.write().await;
-            *set_guard = device_data;
-        }
+        self.device_white_set.clear();
+        for v in device_data { self.device_white_set.insert(v, ()); }
 
         Ok(())
     }
 
-    /// 获取 Hash 数据
-    pub async fn get_version_map(&self) -> HashMap<String, String> {
-        self.version_map.read().await.clone()
-    }
-    pub async fn get_device_white_set(&self) -> HashSet<String> {
-        self.device_white_set.read().await.clone()
-    }
-    pub async fn get_last_version_map(&self) -> HashMap<String, String> {
-        self.version_last_map.read().await.clone()
+    /// 获取 VersionInfo，避免每次 clone
+    pub fn get_version_info(&self, key: &str) -> Option<Arc<VersionInfo>> {
+        self.version_map.get(key).map(|v| v.clone())
     }
 
-    /// 获取 Set 数据
-    pub async fn get_channel_set(&self) -> HashSet<String> {
-        self.channel_set.read().await.clone()
+    pub fn is_device_white(&self, device_no: &str) -> bool {
+        self.device_white_set.contains_key(device_no)
     }
 
-    /// 手动刷新
-    pub async fn refresh(&self, redis_pool: &RedisPool) -> Result<(), String> {
-        self.load_from_redis(redis_pool).await
+    pub fn has_channel(&self, channel: &str) -> bool {
+        self.channel_set.contains_key(channel)
     }
 }

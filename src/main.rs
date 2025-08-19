@@ -33,7 +33,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_value_from_redis)
     })
         .workers(num_cpus::get() * 2) // 根据机器 CPU 设置
-        .bind(("0.0.0.0", 8085))?
+        .bind(("0.0.0.0", 87))?
         .run()
         .await
 }
