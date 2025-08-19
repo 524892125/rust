@@ -15,7 +15,7 @@ pub async fn get_value_from_redis(
 ) -> impl Responder {
     // 先 clone Arc<String> 或用引用保存
     let request_id = get_request_id(&req);
-    println!("requestId: {}", request_id);
+    log::info!("Received request id: {}", request_id);
 
     if !cache.has_channel(&form.channel) {
         return ApiResponse::<()>::fail(404, "Version not found");
