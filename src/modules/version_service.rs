@@ -15,11 +15,11 @@ pub async fn get_value_from_redis(
     form: web::Form<FormParams>
 ) -> impl Responder {
     // 先 clone Arc<String> 或用引用保存
-    let request_id: String = req
+    let request_id: std::sync::Arc<String> = req
         .extensions()
         .get::<std::sync::Arc<String>>()
-        .map(|id| id.as_ref().clone()) // 这里 clone 出一个 String
-        .unwrap_or_else(|| "none".to_string());
+        .cloned() // clone Arc（增加引用计数），不会复制 String 内容
+        .unwrap_or_else(|| std::sync::Arc::new("none".to_string()));
     println!("requestId: {}", request_id);
 
     if !cache.has_channel(&form.channel) {
