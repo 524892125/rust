@@ -3,10 +3,9 @@ use actix_web::{
     Error, HttpMessage,
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
-use uuid::Uuid;
+use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::pin::Pin;
-use std::rc::Rc;
+use uuid::Uuid;
 
 /// RequestId 中间件结构体
 pub struct RequestId;
@@ -17,7 +16,7 @@ impl RequestId {
     }
 }
 
-// 这里实现 Transform trait，用于包装 Service
+// Transform trait: 用于包装 Service
 impl<S, B> Transform<S, ServiceRequest> for RequestId
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
@@ -31,13 +30,13 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(RequestIdMiddleware {
-            service: Rc::new(service),
+            service: std::sync::Arc::new(service),
         })
     }
 }
 
 pub struct RequestIdMiddleware<S> {
-    service: Rc<S>,
+    service: Arc<S>,
 }
 
 impl<S, B> Service<ServiceRequest> for RequestIdMiddleware<S>
@@ -54,17 +53,17 @@ where
     }
 
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
-        // 生成 UUID
-        let request_id = Uuid::new_v4().to_string();
-        // 插入 request extensions，供 handler 使用
+        // 生成 RequestId，并用 Arc 包装
+        let request_id = Arc::new(Uuid::new_v4().to_string());
+        // 放入 request extensions
         req.extensions_mut().insert(request_id.clone());
 
-        // 也可以添加到响应头里
-        let fut = self.service.call(req);
+        let srv = self.service.clone();
         Box::pin(async move {
-            let mut res = fut.await?;
+            let mut res = srv.call(req).await?;
+            // 添加到响应头
             res.headers_mut()
-                .insert("X-Request-Id".parse().unwrap(), request_id.parse().unwrap());
+                .insert("X-Request-Id".parse().unwrap(), request_id.to_string().parse().unwrap());
             Ok(res)
         })
     }

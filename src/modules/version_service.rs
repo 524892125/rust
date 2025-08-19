@@ -1,6 +1,6 @@
 // src/modules/math.rs
 
-use actix_web::{get, web, Responder, HttpResponse, post};
+use actix_web::{get, web, Responder, HttpResponse, post, HttpMessage};
 use crate::redis_pool::RedisPool;
 use crate::modules::version_cache::VersionCache;
 use crate::request::version_request::FormParams;
@@ -10,9 +10,17 @@ use crate::entity::version_info::VersionInfo;
 
 #[post("/get_value")]
 pub async fn get_value_from_redis(
+    req: actix_web::HttpRequest, // <-- 添加这个参数
     cache: web::Data<VersionCache>,
     form: web::Form<FormParams>
 ) -> impl Responder {
+    // 先 clone Arc<String> 或用引用保存
+    let request_id: String = req
+        .extensions()
+        .get::<std::sync::Arc<String>>()
+        .map(|id| id.as_ref().clone()) // 这里 clone 出一个 String
+        .unwrap_or_else(|| "none".to_string());
+    println!("requestId: {}", request_id);
 
     if !cache.has_channel(&form.channel) {
         return ApiResponse::<()>::fail(404, "Version not found");
