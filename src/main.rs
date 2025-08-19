@@ -6,11 +6,12 @@ mod request;
 mod logger;
 mod response;
 mod entity;
+mod middleware;
 
 use crate::redis_pool::create_redis_pool;
 use modules::version_service::get_value_from_redis;
 use modules::version_cache::VersionCache;
-
+use crate::middleware::RequestId;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -30,6 +31,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(redis_pool.clone()))  // ✅ 注册共享数据
             .app_data(web::Data::new(version_cache.clone()))
+            // 注册请求ID中间件
+            .wrap(RequestId::new())  // 假设你的中间件模块是 request.rs
             .service(get_value_from_redis)
     })
         .workers(num_cpus::get() * 2) // 根据机器 CPU 设置

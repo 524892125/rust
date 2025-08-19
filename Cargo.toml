@@ -16,3 +16,5 @@ log = "0.4"
 env_logger = "0.11"   # 最新版可查 crates.io
 chrono = "0.4"
 num_cpus = "1.17.0"
+uuid = { version = "1.17.0", features = ["v4"] }
+futures = "0.3.31"
